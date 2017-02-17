@@ -11,6 +11,28 @@ use App\Controller\AppController;
 class BookmarksController extends AppController
 {
 
+    public function isAuthorized($user)
+    {
+        $action = $this->request->getParam('action');
+
+        // The add and index actions are always allowed.
+        if (in_array($action, ['index', 'add', 'tags'])) {
+            return true;
+        }
+        // All other actions require an id.
+        if (!$this->request->getParam('pass.0')) {
+            return false;
+        }
+
+        // Check that the bookmark belongs to the current user.
+        $id = $this->request->getParam('pass.0');
+        $bookmark = $this->Bookmarks->get($id);
+        if ($bookmark->user_id == $user['id']) {
+            return true;
+        }
+        return parent::isAuthorized($user);
+    }
+
     /**
      * Index method
      *
@@ -36,12 +58,13 @@ class BookmarksController extends AppController
      */
     public function view($id = null)
     {
-        $bookmark = $this->Bookmarks->get($id, [
-            'contain' => ['Users', 'Tags']
-        ]);
-
-        $this->set('bookmark', $bookmark);
-        $this->set('_serialize', ['bookmark']);
+        $this->paginate = [
+            'conditions' => [
+            'Bookmarks.user_id' => $this->Auth->user('id'),
+        ]
+        ];
+        $this->set('bookmarks', $this->paginate($this->Bookmarks));
+        $this->set('_serialize', ['bookmarks']);
     }
 
     /**
@@ -54,6 +77,7 @@ class BookmarksController extends AppController
         $bookmark = $this->Bookmarks->newEntity();
         if ($this->request->is('post')) {
             $bookmark = $this->Bookmarks->patchEntity($bookmark, $this->request->data);
+            $bookmark->user_id = $this->Auth->user('id');
             if ($this->Bookmarks->save($bookmark)) {
                 $this->Flash->success(__('The bookmark has been saved.'));
 
@@ -81,6 +105,7 @@ class BookmarksController extends AppController
         ]);
         if ($this->request->is(['patch', 'post', 'put'])) {
             $bookmark = $this->Bookmarks->patchEntity($bookmark, $this->request->data);
+            $bookmark->user_id = $this->Auth->user('id');
             if ($this->Bookmarks->save($bookmark)) {
                 $this->Flash->success(__('The bookmark has been saved.'));
 
@@ -117,11 +142,11 @@ class BookmarksController extends AppController
 
     public function tags()
     {
-    $tags = $this->request->getParam('pass');
-    $bookmarks = $this->Bookmarks->find('tagged', [
-        'tags' => $tags
-    ]);
-    $this->set(compact('bookmarks', 'tags'));
+        $tags = $this->request->getParam('pass');
+        $bookmarks = $this->Bookmarks->find('tagged', [
+            'tags' => $tags
+        ]);
+        $this->set(compact('bookmarks', 'tags'));
     }
 
 }
